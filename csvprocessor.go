@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"os"
 	"strings"
@@ -15,12 +16,6 @@ type CsvProcessor interface {
 	Process() error
 }
 
-// CsvRowTransformer represents the transformer function that modifies each row in csv if needed.
-// It takes a row as a slice of strings with context as input and produces the transformed row that will be written to the output file.
-// The context contains the current split ID and overall row id.
-// Key names for context values are csvprocessor.CtxChunkNum and csvprocessor.CtxRowNum.
-type CsvRowTransformer func(context.Context, []string) []string
-
 type Processor struct {
 	// InputFile location as string
 	InputFile string
@@ -30,8 +25,8 @@ type Processor struct {
 	ChunkSize int
 
 	// RowTransformer represents the transformer function that will be applied to each row in the input.
-	// If no transformation is need, use NoOpTransformer.
-	// This will be called for header rows too. For header rows ctx.
+	// If no transformation is needed, use NoOpTransformer.
+	// This will be called for header rows too. For header rows, CtxIsHeader value in ctx will be true.
 	RowTransformer CsvRowTransformer
 
 	// OutputFileFormat represents the format with which the output file names are generated.
@@ -39,7 +34,7 @@ type Processor struct {
 	// Only %d format specifier is supported and it will be replaced with the chunk number (0,1,2 etc) for each chunk.
 	// Eg: "output_%02d.csv" will generate output files like "output_00.csv", "output_01.csv" etc. where each file contains a single chunk of the file with no of rows as specified in ChunkSize.
 	//
-	// If there will be single output file, we can omit the '%d'. Eg: "only_output.csv"
+	// If there will be only a single output file, we can omit the '%d'. Eg: "only_output.csv"
 	// In case the file already exists, then the content will be appended to it.
 	OutputFileFormat string
 
@@ -55,10 +50,14 @@ type Processor struct {
 
 	// Unexported fields
 	header []string // contains the header row
-
 }
 
 type ctxKey string
+
+type streamElement struct {
+	Row []string
+	Err error
+}
 
 var (
 	// CtxChunkNum represents the context.Context() key which contains the current Chunk ID being processed by the Processor.
@@ -74,14 +73,17 @@ var (
 
 	// CtxRowNum represents the context.Context() key which contains the Chunk size for this processor.
 	CtxChunkSize ctxKey = "_csvproc_chunksize"
+
+	// file permission for the output files
+	permission fs.FileMode = 0o644
 )
 
-func New(inputFile string, chunkSize int, outputFileFormat string, rowTransformer func(context.Context, []string) []string) Processor {
+func New(inputFile string, chunkSize int, outputFileFormat string, rowTransformer func(context.Context, []string) []string) *Processor {
 	if rowTransformer == nil {
 		rowTransformer = NoOpTransformer()
 	}
 
-	return Processor{
+	return &Processor{
 		InputFile:        inputFile,
 		ChunkSize:        chunkSize,
 		OutputFileFormat: outputFileFormat,
@@ -90,7 +92,8 @@ func New(inputFile string, chunkSize int, outputFileFormat string, rowTransforme
 	}
 }
 
-func (c Processor) Process() error {
+// Process performs the transformation and splitting and writes the output to the given location.
+func (c *Processor) Process() error {
 	rows := 0
 	split := 1
 
@@ -112,17 +115,21 @@ func (c Processor) Process() error {
 
 	for element := range streamRows(inputFile) {
 		row := element.Row
-		err := element.Err
-		if err != nil {
-			return err
+		if element.Err != nil {
+			return element.Err
 		}
 
 		if needNewChunk {
 			if fileWriter != nil {
 				// close previous chunk file
 				c.Logger.Printf("%d rows processed \n", rows)
-				c.flushToFile(fileWriter)
-				outputFile.Close()
+				if err = c.flushToFile(fileWriter); err != nil {
+					return err
+				}
+
+				if err = outputFile.Close(); err != nil {
+					return err
+				}
 				split++
 				addHeaders = !c.SkipHeaders
 			}
@@ -145,7 +152,7 @@ func (c Processor) Process() error {
 
 			// transform and write header
 			ctx := c.getCtx(split, -1, true)
-			if err = fileWriter.Write(c.RowTransformer(ctx, c.header)); err != nil {
+			if err := fileWriter.Write(c.RowTransformer(ctx, c.header)); err != nil {
 				return err
 			}
 
@@ -158,7 +165,7 @@ func (c Processor) Process() error {
 		rows++
 		// transform the row
 		ctx := c.getCtx(split, rows, false)
-		if err = fileWriter.Write(c.RowTransformer(ctx, row)); err != nil {
+		if err := fileWriter.Write(c.RowTransformer(ctx, row)); err != nil {
 			return err
 		}
 
@@ -175,7 +182,7 @@ func (c Processor) Process() error {
 	return nil
 }
 
-func (c Processor) getCtx(chunkID int, rowID int, isHeader bool) context.Context {
+func (c *Processor) getCtx(chunkID, rowID int, isHeader bool) context.Context {
 	ctx := context.WithValue(context.TODO(), CtxChunkSize, c.ChunkSize)
 	ctx = context.WithValue(ctx, CtxChunkNum, chunkID)
 	ctx = context.WithValue(ctx, CtxRowNum, rowID)
@@ -183,33 +190,21 @@ func (c Processor) getCtx(chunkID int, rowID int, isHeader bool) context.Context
 	return ctx
 }
 
-func (c Processor) WriteHeader(writer *csv.Writer) {
-	if c.SkipHeaders {
-		return
-	}
-
-	writer.Write(c.header)
-}
-
-func (c Processor) createNewSplitFile(split int) (*os.File, error) {
+func (c *Processor) createNewSplitFile(split int) (*os.File, error) {
 	filename := fmt.Sprintf(c.OutputFileFormat, split)
 	filename = strings.Split(filename, "%!")[0]
 
-	return os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	return os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, permission)
 }
 
-func (c Processor) flushToFile(w *csv.Writer) error {
+func (c *Processor) flushToFile(w *csv.Writer) error {
 	w.Flush()
 	return w.Error()
 }
 
-type streamElement struct {
-	Row []string
-	Err error
-}
-
 func streamRows(rc io.Reader) (ch chan streamElement) {
-	ch = make(chan streamElement, 10)
+	buffer := 10
+	ch = make(chan streamElement, buffer)
 	go func() {
 		r := csv.NewReader(rc)
 		r.LazyQuotes = true
@@ -225,5 +220,6 @@ func streamRows(rc io.Reader) (ch chan streamElement) {
 			ch <- streamElement{rec, err}
 		}
 	}()
+
 	return
 }
