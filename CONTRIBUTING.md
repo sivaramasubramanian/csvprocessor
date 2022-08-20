@@ -1,13 +1,12 @@
 # Contributing
 
 Pull requests and Bug reports are always welcome.
-When contributing to this repository, please first discuss the change you wish to make via issue,
-email, or any other method with the owners of this repository before making a change. 
+When contributing to this repository, please first discuss the change you wish to make by opening an issue.
 
 Please note we have a code of conduct, please follow it in all your interactions with the project.
 
 ## Coding guidelines
-1. Ensure to add test cases for any changes to keep the code coverage at a maximum.
+1. Ensure to add test cases for any changes, to keep the code coverage at a maximum.
 2. Always run lint (golang-ci lint) before commiting any changes.
 3. Follow the guidelines given in [Golang CodeReviewComments]("https://github.com/golang/go/wiki/CodeReviewComments")
 4. Add comments judiciously explaining any changes, wherever necessary.

@@ -1,3 +1,6 @@
+// Package csvprocessor can be used to efficiently transform and split CSV files.
+//
+// See README.md for more details
 package csvprocessor
 
 import (
@@ -78,6 +81,12 @@ var (
 	permission fs.FileMode = 0o644
 )
 
+// New creates a new instance of CsvProcessor.
+//
+// inputFile - specifies the input file location.
+// chunkSize - no. of rows per file (if you do want to split the output file give the total row count here).
+// outputFileFormat - the format with which the output file names are generated.
+// rowTransformer - function to modify/transform the row.
 func New(inputFile string, chunkSize int, outputFileFormat string, rowTransformer func(context.Context, []string) []string) *Processor {
 	if rowTransformer == nil {
 		rowTransformer = NoOpTransformer()
