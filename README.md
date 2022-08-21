@@ -154,6 +154,14 @@ if err != nil {
 }
 ```
 
+## Roadmap
+- [x] csvprocessor
+- [x] Transforemr
+- [ ] Wrapper
+- [ ] Helper Functions including merger
+- [ ] Unit tests
+- [ ] Benchmarking
+
 ## Contributing
 
 Contributions are always welcome!
