@@ -10,20 +10,24 @@ The file is streamed and processed so it can handle large files that are multipl
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://choosealicense.com/licenses/mit/)
 
 ## Installation
-Install
+Install:
 
+Use go get to install the latest version of the library.
 ```shell
 go get -u github.com/sivaramasubramanian/csvprocessor
 ```
 
 Import:
-
 ```go
 import "github.com/sivaramasubramanian/csvprocessor"
 ```
 ## Usage
+- [Simple Usage](#simple-usage)
+    - [Splitting a single CSV file into multiple files](#splitting-a-single-csv-file-into-multiple-files)
 
-### Splitting a single CSV file into multiple files
+
+### Simple Usage
+#### Splitting a single CSV file into multiple files
 ```go
 // To split a file into multiple files
 
@@ -43,7 +47,7 @@ if err != nil {
 ```
 
 
-### Transforming the content of the CSV
+#### Transforming the content of the CSV
 For example, to convert all the values in the 3rd column to Upper case,
 ```go
 inputFile := "/path/to/input.csv"
@@ -72,7 +76,7 @@ if err != nil {
 }
 ```
 
-### Predefined Transformer Functions
+#### Predefined Transformer Functions
 For some often used cases, there are pre-defined transformer functions that can be used.
 For example, to add row number column to a CSV.
 ```go
@@ -89,7 +93,7 @@ if err != nil {
 ```
 See [transformers.go](./transformers.go) for more pre-defined transformer functions.
 
-### Transform without splitting
+#### Transform without splitting
 To do just transformation without splitiing the CSV into multiple parts,
 Give the rowsPerFile value to be equal to or greater than the total rows in file.
 ```go
@@ -105,7 +109,7 @@ if err != nil {
 }
 ```
 
-### Combining multiple Transformers
+#### Combining multiple Transformers
 To do a series of transformations for each row, we can chain the transformations,
 ```go
 inputFile := "/path/to/input.csv"
@@ -138,15 +142,15 @@ if err != nil {
 }
 ```
 
-### Using custom logger
+#### Using custom logger
 To provide your own logger,
 ```go
-// any custom logger that implements `Printf(format string, args ...any)`
-logger = logrus.New()
+// any custom logger that implements `func(format string, args ...any)`
+logger = logrus.New().Debugf
 
 c := csvprocessor.New("input.csv", 100, "output.csv", nil)
 
-c.Logger = logger // set logger to csvprocessor
+c.LoggerFunc = logger // set logger to csvprocessor
 
 err := c.Process()
 if err != nil {
@@ -154,10 +158,37 @@ if err != nil {
 }
 ```
 
+#### Wrapping transformer executions
+For example, To wrap the transformer with debug statements
+```go
+logFunc := logrus.WithField("user", "1234").Infof
+
+inputFile := "/path/to/input.csv"
+rowsPerFile := 5
+outputFilenameFormat := "/path/to/input_%03d.csv"
+// add row number within current chunk
+addChunkRowNumber := csvprocessor.AddRowNoTransformer("Chunk Row no.")
+// print debug statements for each row
+debug := csvprocessor.DebugWrapper
+// recover from panic in the wrapped transformer function
+panicSafe := csvprocessor.PanicSafe
+
+// chain all these transformations
+wrappedTransformer := panicSafe(debug(addChunkRowNumber, logFunc), logFunc)
+
+// performs all the transformations
+c := csvprocessor.New(inputFile, rowsPerFile, outputFilenameFormat, wrappedTransformer)
+c.LoggerFunc = logFunc
+err := c.Process()
+if err != nil {
+    log.Printf("error while splitting csv %v ", err)
+}
+```
+
 ## Roadmap
 - [x] csvprocessor
 - [x] Transforemr
-- [ ] Wrapper
+- [x] Wrapper
 - [ ] Helper Functions including merger
 - [ ] Unit tests
 - [ ] Benchmarking

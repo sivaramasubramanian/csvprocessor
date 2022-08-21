@@ -46,13 +46,13 @@ type Processor struct {
 	// else the first row of the input file will be written as header in each split chunk.
 	SkipHeaders bool
 
-	// Logger represents the logger used by the processor to print info and diagnostics.
-	Logger interface {
-		Printf(string, ...any)
-	}
+	// LoggerFunc represents the logger used by the processor to print info and diagnostics.
+	LoggerFunc Logger
 
 	// Unexported fields
-	header []string // contains the header row
+	header               []string                          // contains the header row
+	input                io.ReadCloser                     // reader from which input content is read.
+	outputChunkGenerator func(int) (io.WriteCloser, error) // function to generate output chunk files
 }
 
 type ctxKey string
@@ -77,52 +77,71 @@ var (
 	// CtxRowNum represents the context.Context() key which contains the Chunk size for this processor.
 	CtxChunkSize ctxKey = "_csvproc_chunksize"
 
-	// file permission for the output files
+	// noOpTransformer is the default transformer, it does not modify the rows.
+	noOpTransformer CsvRowTransformer = NoOpTransformer()
+)
+
+const (
+	// file permission for the output files.
 	permission fs.FileMode = 0o644
 )
 
 // New creates a new instance of CsvProcessor.
 //
-// inputFile - specifies the input file location.
-// chunkSize - no. of rows per file (if you do want to split the output file give the total row count here).
-// outputFileFormat - the format with which the output file names are generated.
-// rowTransformer - function to modify/transform the row.
+// Parameters:
+// 	inputFile - specifies the input file location.
+// 	chunkSize - no. of rows per file (if you do want to split the output file give the total row count here).
+// 	outputFileFormat - the format with which the output file names are generated.
+// 	rowTransformer - function to modify/transform the row.
 func New(inputFile string, chunkSize int, outputFileFormat string, rowTransformer func(context.Context, []string) []string) *Processor {
 	if rowTransformer == nil {
-		rowTransformer = NoOpTransformer()
+		rowTransformer = noOpTransformer
 	}
 
 	return &Processor{
 		InputFile:        inputFile,
 		ChunkSize:        chunkSize,
 		OutputFileFormat: outputFileFormat,
-		Logger:           log.Default(),
+		LoggerFunc:       log.Default().Printf,
 		RowTransformer:   rowTransformer,
 	}
 }
 
 // Process performs the transformation and splitting and writes the output to the given location.
 func (c *Processor) Process() error {
-	rows := 0
-	split := 1
+	if c.input == nil {
+		inputFile, err := os.Open(c.InputFile)
+		if err != nil {
+			return err
+		}
+		defer inputFile.Close()
 
-	inputFile, err := os.Open(c.InputFile)
-	if err != nil {
-		return err
+		c.input = inputFile
 	}
-	defer inputFile.Close()
 
+	if c.outputChunkGenerator == nil {
+		c.outputChunkGenerator = c.createNewSplitFile
+	}
+
+	return c.process()
+}
+
+func (c *Processor) process() error {
+	currentRow := 0
+	currentSplit := 1
+	var err error
 	var fileWriter *csv.Writer
-	var outputFile *os.File
+	var outputFile io.WriteCloser
 	var addHeaders = !c.SkipHeaders
 	var needNewChunk = true
 	defer func() {
 		if outputFile != nil {
+			// close last output chunk file
 			outputFile.Close()
 		}
 	}()
 
-	for element := range streamRows(inputFile) {
+	for element := range streamRows(c.input) {
 		row := element.Row
 		if element.Err != nil {
 			return element.Err
@@ -131,7 +150,7 @@ func (c *Processor) Process() error {
 		if needNewChunk {
 			if fileWriter != nil {
 				// close previous chunk file
-				c.Logger.Printf("%d rows processed \n", rows)
+				c.LoggerFunc("%d rows processed \n", currentRow)
 				if err = c.flushToFile(fileWriter); err != nil {
 					return err
 				}
@@ -139,11 +158,11 @@ func (c *Processor) Process() error {
 				if err = outputFile.Close(); err != nil {
 					return err
 				}
-				split++
+				currentSplit++
 				addHeaders = !c.SkipHeaders
 			}
 
-			outputFile, err = c.createNewSplitFile(split)
+			outputFile, err = c.outputChunkGenerator(currentSplit)
 			if err != nil {
 				return err
 			}
@@ -160,34 +179,34 @@ func (c *Processor) Process() error {
 			}
 
 			// transform and write header
-			ctx := c.getCtx(split, -1, true)
+			ctx := c.getCtx(currentSplit, -1, true)
 			if err := fileWriter.Write(c.RowTransformer(ctx, c.header)); err != nil {
 				return err
 			}
 
-			if rows == 0 {
+			if currentRow == 0 {
 				needNewChunk = false
 				continue
 			}
 		}
 
-		rows++
+		currentRow++
 		// transform the row
-		ctx := c.getCtx(split, rows, false)
+		ctx := c.getCtx(currentSplit, currentRow, false)
 		if err := fileWriter.Write(c.RowTransformer(ctx, row)); err != nil {
 			return err
 		}
 
-		needNewChunk = (rows % c.ChunkSize) == 0
+		needNewChunk = (currentRow % c.ChunkSize) == 0
 	}
 
-	if (rows%c.ChunkSize) != 0 && fileWriter != nil {
+	if (currentRow%c.ChunkSize) != 0 && fileWriter != nil {
 		if err := c.flushToFile(fileWriter); err != nil {
 			return err
 		}
 	}
 
-	c.Logger.Printf("%d total rows updated", rows)
+	c.LoggerFunc("%d total rows updated", currentRow)
 	return nil
 }
 
@@ -199,7 +218,8 @@ func (c *Processor) getCtx(chunkID, rowID int, isHeader bool) context.Context {
 	return ctx
 }
 
-func (c *Processor) createNewSplitFile(split int) (*os.File, error) {
+func (c *Processor) createNewSplitFile(split int) (io.WriteCloser, error) {
+	c.LoggerFunc("createNewSplitfile called %d", split)
 	filename := fmt.Sprintf(c.OutputFileFormat, split)
 	filename = strings.Split(filename, "%!")[0]
 
