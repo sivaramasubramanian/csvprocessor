@@ -1,88 +1,70 @@
+# See https://github.com/golangci/golangci-lint/blob/master/.golangci.example.yml
+run:
+  tests: true
+
 linters-settings:
   errcheck:
     check-type-assertions: true
-  goconst:
-    min-len: 2
-    min-occurrences: 3
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-    disabled-checks:
-      - sloppyReassign
-  gomnd:
-    settings:
-      mnd:
-        # don't include the "operation" and "assign" checks
-        checks: argument,case,condition,return
-  govet:
-    check-shadowing: true
-  nolintlint:
-    require-explanation: true
-    require-specific: true
+    check-blank: true
+  gocyclo:
+    min-complexity: 20
+  dupl:
+    threshold: 100
+  funlen:
+    lines: 80
+  misspell:
+    locale: US
+  unused:
+    check-exported: false
+  unparam:
+    check-exported: true
 
 linters:
-  disable-all: true
-  enable:
-    - bodyclose
-    - deadcode
-    - depguard
-    - dogsled
-    - dupl
-    - errcheck
-    # - errorlint
-    - exportloopref
-    - exhaustive
-    - goconst
-    - godot
-    - gocritic
-    - gofmt
-    - goimports
+  enable-all: true
+  disable:
+    - lll
+    - maligned
+    - gochecknoglobals
     - gomnd
-    - gocyclo
-    - goprintffuncname
-    - gosec
-    - gosimple
-    - govet
-    - ineffassign
-    - misspell
-    - nakedret
-    - nolintlint
-    - prealloc
-    - predeclared
-    - revive
-    - staticcheck
-    - structcheck
-    - stylecheck
-    - thelper
-    - tparallel
-    - typecheck
-    - unconvert
-    - unparam
-    - varcheck
-    - whitespace
-    # - wsl
+    - wrapcheck
+    - paralleltest
+    - forbidigo
+    - nlreturn
+    - exhaustivestruct
+    - interfacer # deprecated
+    - forcetypeassert
+    - scopelint # deprecated
+    - ifshort # too many false positives
+    - golint # deprecated
+    - varnamelen
+    - tagliatelle
+    - errname
+    - ireturn
+    - exhaustruct
+    - nonamedreturns
+    - wsl
+    - gofumpt
 
 issues:
-  fix: true
+  exclude-use-default: true
+  exclude:
+    - "Error return value of .((os\\.)?std(out|err)\\..*|.*Close|.*Flush|os\\.Remove(All)?|.*printf?|os\\.(Un)?Setenv). is not checked"
+    - "exported (type|method|function) (.+) should have comment or be unexported"
+    - "ST1000: at least one file in a package should have a package comment"
   exclude-rules:
-    - path: _test\.go # disable some linters for test files
-      linters:
-        - gocyclo
-        - gosec
+    - linters:
+        - gomnd
+        - goconst
+        - goerr113
+        - noctx
+        - funlen
         - dupl
+        - structcheck
+        - unused
+        - unparam
+        - nosnakecase
+      path: "_test.go"
     - linters:
-      - gosec
-      text: "weak cryptographic primitive"
-    - linters:
-      - stylecheck
-      text: "error strings should not be capitalized"
+        - errcheck # Error checking omitted for brevity.
+      path: "example_"
 
-  max-issues-per-linter: 0
-  max-same-issues: 0
-
-run:
-  issues-exit-code: 1

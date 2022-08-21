@@ -1,0 +1,135 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/sivaramasubramanian/csvprocessor
+BenchmarkProcessor_Process-8                	  156613	      7450 ns/op
+--- BENCH: BenchmarkProcessor_Process-8
+    csvprocessor.go:134: 1 rows processed 
+    csvprocessor.go:134: 2 rows processed 
+    csvprocessor.go:187: 3 total rows updated
+    csvprocessor_test.go:161: 
+         i = 0 : arr = a,b,c
+        d,e,f
+         : len = 12
+    csvprocessor_test.go:161: 
+         i = 1 : arr = a,b,c
+        g,h,i
+	... [output truncated]
+BenchmarkProcessor_Process-8                	  157293	      7210 ns/op
+--- BENCH: BenchmarkProcessor_Process-8
+    csvprocessor.go:134: 1 rows processed 
+    csvprocessor.go:134: 2 rows processed 
+    csvprocessor.go:187: 3 total rows updated
+    csvprocessor_test.go:161: 
+         i = 0 : arr = a,b,c
+        d,e,f
+         : len = 12
+    csvprocessor_test.go:161: 
+         i = 1 : arr = a,b,c
+        g,h,i
+	... [output truncated]
+BenchmarkProcessor_Process-8                	  172705	      6992 ns/op
+--- BENCH: BenchmarkProcessor_Process-8
+    csvprocessor.go:134: 1 rows processed 
+    csvprocessor.go:134: 2 rows processed 
+    csvprocessor.go:187: 3 total rows updated
+    csvprocessor_test.go:161: 
+         i = 0 : arr = a,b,c
+        d,e,f
+         : len = 12
+    csvprocessor_test.go:161: 
+         i = 1 : arr = a,b,c
+        g,h,i
+	... [output truncated]
+BenchmarkProcessor_Process-8                	  173582	      7057 ns/op
+--- BENCH: BenchmarkProcessor_Process-8
+    csvprocessor.go:134: 1 rows processed 
+    csvprocessor.go:134: 2 rows processed 
+    csvprocessor.go:187: 3 total rows updated
+    csvprocessor_test.go:161: 
+         i = 0 : arr = a,b,c
+        d,e,f
+         : len = 12
+    csvprocessor_test.go:161: 
+         i = 1 : arr = a,b,c
+        g,h,i
+	... [output truncated]
+BenchmarkProcessor_Process-8                	  164346	      7139 ns/op
+--- BENCH: BenchmarkProcessor_Process-8
+    csvprocessor.go:134: 1 rows processed 
+    csvprocessor.go:134: 2 rows processed 
+    csvprocessor.go:187: 3 total rows updated
+    csvprocessor_test.go:161: 
+         i = 0 : arr = a,b,c
+        d,e,f
+         : len = 12
+    csvprocessor_test.go:161: 
+         i = 1 : arr = a,b,c
+        g,h,i
+	... [output truncated]
+BenchmarkProcessor_ProcessWithoutHeader-8   	  121090	      8880 ns/op
+--- BENCH: BenchmarkProcessor_ProcessWithoutHeader-8
+    csvprocessor.go:134: 1 rows processed 
+    csvprocessor.go:134: 2 rows processed 
+    csvprocessor.go:134: 3 rows processed 
+    csvprocessor.go:187: 4 total rows updated
+    csvprocessor_test.go:185: 
+         i = 0 : arr = a,b,c
+         : len = 6
+    csvprocessor_test.go:185: 
+         i = 1 : arr = d,e,f
+         : len = 6
+	... [output truncated]
+BenchmarkProcessor_ProcessWithoutHeader-8   	  138004	      8738 ns/op
+--- BENCH: BenchmarkProcessor_ProcessWithoutHeader-8
+    csvprocessor.go:134: 1 rows processed 
+    csvprocessor.go:134: 2 rows processed 
+    csvprocessor.go:134: 3 rows processed 
+    csvprocessor.go:187: 4 total rows updated
+    csvprocessor_test.go:185: 
+         i = 0 : arr = a,b,c
+         : len = 6
+    csvprocessor_test.go:185: 
+         i = 1 : arr = d,e,f
+         : len = 6
+	... [output truncated]
+BenchmarkProcessor_ProcessWithoutHeader-8   	  132030	      8772 ns/op
+--- BENCH: BenchmarkProcessor_ProcessWithoutHeader-8
+    csvprocessor.go:134: 1 rows processed 
+    csvprocessor.go:134: 2 rows processed 
+    csvprocessor.go:134: 3 rows processed 
+    csvprocessor.go:187: 4 total rows updated
+    csvprocessor_test.go:185: 
+         i = 0 : arr = a,b,c
+         : len = 6
+    csvprocessor_test.go:185: 
+         i = 1 : arr = d,e,f
+         : len = 6
+	... [output truncated]
+BenchmarkProcessor_ProcessWithoutHeader-8   	  138729	      8585 ns/op
+--- BENCH: BenchmarkProcessor_ProcessWithoutHeader-8
+    csvprocessor.go:134: 1 rows processed 
+    csvprocessor.go:134: 2 rows processed 
+    csvprocessor.go:134: 3 rows processed 
+    csvprocessor.go:187: 4 total rows updated
+    csvprocessor_test.go:185: 
+         i = 0 : arr = a,b,c
+         : len = 6
+    csvprocessor_test.go:185: 
+         i = 1 : arr = d,e,f
+         : len = 6
+	... [output truncated]
+BenchmarkProcessor_ProcessWithoutHeader-8   	  139798	      8874 ns/op
+--- BENCH: BenchmarkProcessor_ProcessWithoutHeader-8
+    csvprocessor.go:134: 1 rows processed 
+    csvprocessor.go:134: 2 rows processed 
+    csvprocessor.go:134: 3 rows processed 
+    csvprocessor.go:187: 4 total rows updated
+    csvprocessor_test.go:185: 
+         i = 0 : arr = a,b,c
+         : len = 6
+    csvprocessor_test.go:185: 
+         i = 1 : arr = d,e,f
+         : len = 6
+	... [output truncated]
+PASS
+ok  	github.com/sivaramasubramanian/csvprocessor	14.853s
