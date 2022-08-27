@@ -98,7 +98,7 @@ func TestProcessor_Process(t *testing.T) {
 			expect: expect{
 				wantErr:       false,
 				bufferLength:  399 / 3,
-				elementLength: 6*3 + 6,
+				elementLength: (6 * 3) + 6,
 			},
 		},
 		{

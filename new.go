@@ -159,7 +159,3 @@ func validate(c *Processor) (*Processor, error) {
 
 	return c, nil
 }
-
-func ValidationError(msg string) error {
-	return nil
-}

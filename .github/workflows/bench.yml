@@ -7,7 +7,7 @@ on:
       old:
         description: 'Old Ref'
         required: false
-        default: 'master'
+        default: 'main'
       new:
         description: 'New Ref'
         required: true
@@ -67,9 +67,8 @@ jobs:
         uses: actions/cache@v2
         with:
           path: |
-            bench-master.txt
             bench-main.txt
-          # Use base sha for PR or new commit hash for master/main push in benchmark result key.
+          # Use base sha for PR or new commit hash for main/main push in benchmark result key.
           key: ${{ runner.os }}-bench-${{ (github.event.pull_request.base.sha != github.event.after) && github.event.pull_request.base.sha || github.event.after }}
       - name: Checkout base code
         if: env.RUN_BASE_BENCHMARK == 'on' && steps.benchmark-base.outputs.cache-hit != 'true' && (github.event.pull_request.base.sha != '' || github.event.inputs.old != '')
@@ -80,9 +79,9 @@ jobs:
       - name: Run base benchmark
         if: env.RUN_BASE_BENCHMARK == 'on' && steps.benchmark-base.outputs.cache-hit != 'true' && (github.event.pull_request.base.sha != '' || github.event.inputs.old != '')
         run: |
-          export REF_NAME=master
+          export REF_NAME=main
           cd __base
-          make | grep bench-run && (BENCH_COUNT=5 make bench-run bench-stat && cp bench-master.txt ../bench-master.txt) || echo "No benchmarks in base"
+          make | grep bench-run && (BENCH_COUNT=5 make bench-run bench-stat && cp bench-main.txt ../bench-main.txt) || echo "No benchmarks in base"
       - name: Benchmark
         id: bench
         run: |
