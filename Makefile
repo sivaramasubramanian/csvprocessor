@@ -21,6 +21,7 @@ install:  .git/hooks/pre-commit test bench
 	@git config core.hooksPath .githooks/
 	@echo "checking githooks path"
 	@git config --get core.hooksPath
+	@$(GO) install github.com/kisielk/errcheck@latest
 
 ## Run tests
 test: test-unit
