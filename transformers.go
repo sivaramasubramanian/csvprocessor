@@ -2,7 +2,7 @@ package csvprocessor
 
 import (
 	"context"
-	"fmt"
+	"strconv"
 )
 
 // CsvRowTransformer represents the transformer function that modifies each row in csv.
@@ -23,14 +23,14 @@ func NoOpTransformer() CsvRowTransformer {
 // If SkipHeaders is false, it will add a header column for the row number with the given columnName.
 func AddRowNoTransformer(columnName string) CsvRowTransformer {
 	return func(ctx context.Context, row []string) []string {
-		isHeader, _ := (ctx.Value(CtxIsHeader)).(bool)
-		if isHeader {
+		isHeader, isBool := (ctx.Value(CtxIsHeader)).(bool)
+		if isBool && isHeader {
 			return addToSliceAtIndex(row, columnName, 0)
 		}
 
-		rowID, _ := ctx.Value(CtxRowNum).(int)
+		rowID, _ := ctx.Value(CtxRowNum).(int) //nolint:errcheck
 
-		return addToSliceAtIndex(row, fmt.Sprintf("%d", rowID), 0)
+		return addToSliceAtIndex(row, strconv.Itoa(rowID), 0)
 	}
 }
 
@@ -38,19 +38,19 @@ func AddRowNoTransformer(columnName string) CsvRowTransformer {
 // If SkipHeaders is false, it will add a header column for the row number with the given columnName.
 func AddChunkRowNoTransformer(columnName string) CsvRowTransformer {
 	return func(ctx context.Context, row []string) []string {
-		isHeader, _ := (ctx.Value(CtxIsHeader)).(bool)
-		if isHeader {
+		isHeader, isBool := (ctx.Value(CtxIsHeader)).(bool)
+		if isBool && isHeader {
 			return addToSliceAtIndex(row, columnName, 0)
 		}
 
-		rowID, _ := ctx.Value(CtxRowNum).(int)
-		chunkSize, _ := (ctx.Value(CtxChunkSize)).(int)
+		rowID, _ := ctx.Value(CtxRowNum).(int)          //nolint:errcheck
+		chunkSize, _ := (ctx.Value(CtxChunkSize)).(int) //nolint:errcheck
 		chunkRowID := (rowID % chunkSize)
 		if chunkRowID == 0 {
 			chunkRowID = chunkSize
 		}
 
-		return addToSliceAtIndex(row, fmt.Sprintf("%d", chunkRowID), 0)
+		return addToSliceAtIndex(row, strconv.Itoa(chunkRowID), 0)
 	}
 }
 
@@ -58,8 +58,8 @@ func AddChunkRowNoTransformer(columnName string) CsvRowTransformer {
 // If SkipHeaders is false, it will add a header column for the row number with the given columnName.
 func ReplaceValuesTransformer(replacements map[string]string) CsvRowTransformer {
 	return func(ctx context.Context, row []string) []string {
-		isHeader, _ := (ctx.Value(CtxIsHeader)).(bool)
-		if isHeader {
+		isHeader, isBool := (ctx.Value(CtxIsHeader)).(bool)
+		if isBool && isHeader {
 			return row
 		}
 
@@ -77,8 +77,8 @@ func ReplaceValuesTransformer(replacements map[string]string) CsvRowTransformer 
 // If SkipHeaders is false, it will add a header column for the row number with the given columnName.
 func AddConstantColumnTransformer(columnName, val string, columIndex int) CsvRowTransformer {
 	return func(ctx context.Context, row []string) []string {
-		isHeader, _ := (ctx.Value(CtxIsHeader)).(bool)
-		if isHeader {
+		isHeader, isBool := (ctx.Value(CtxIsHeader)).(bool)
+		if isBool && isHeader {
 			return addToSliceAtIndex(row, columnName, columIndex)
 		}
 
@@ -99,6 +99,7 @@ func ChainTransformers(transformers ...CsvRowTransformer) CsvRowTransformer {
 	}
 }
 
+// addToSliceAtIndex adds the given value at particular index and shifts the remaining elements to the left.
 func addToSliceAtIndex(slice []string, val string, index int) []string {
 	slice = append(slice, "")
 	copy(slice[(index+1):], slice[index:])

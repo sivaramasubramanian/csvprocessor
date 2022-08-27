@@ -4,12 +4,12 @@
 package csvprocessor
 
 import (
-	"context"
+	"bufio"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
 	"os"
 	"strings"
 )
@@ -19,48 +19,61 @@ type CsvProcessor interface {
 	Process() error
 }
 
+// CsvWriter represents the writer on to which CSV content can written.
+// This abstracts the csv.Writer struct from encoding/csv.
+type CsvWriter interface {
+	Flush()
+	Error() error
+	Write(record []string) error
+}
+
+// CsvReader represents the reader from which CSV content can be read.
+type CsvReader interface {
+	Read() ([]string, error)
+}
+
+// Processor is the default implementation for CsvProcessor.
 type Processor struct {
-	// InputFile location as string
-	InputFile string
-
-	// ChunkSize represents the no of rows per each file when splitting the CSV into multiple files.
+	// chunkSize represents the no of rows per each file when splitting the CSV into multiple files.
 	// To prevent splitting, set this value to be greater than the total no. of rows.
-	ChunkSize int
+	chunkSize int
 
-	// RowTransformer represents the transformer function that will be applied to each row in the input.
+	// rowTransformer represents the transformer function that will be applied to each row in the input.
 	// If no transformation is needed, use NoOpTransformer.
 	// This will be called for header rows too. For header rows, CtxIsHeader value in ctx will be true.
-	RowTransformer CsvRowTransformer
+	rowTransformer CsvRowTransformer
 
-	// OutputFileFormat represents the format with which the output file names are generated.
-	//
-	// Only %d format specifier is supported and it will be replaced with the chunk number (0,1,2 etc) for each chunk.
-	// Eg: "output_%02d.csv" will generate output files like "output_00.csv", "output_01.csv" etc. where each file contains a single chunk of the file with no of rows as specified in ChunkSize.
-	//
-	// If there will be only a single output file, we can omit the '%d'. Eg: "only_output.csv"
-	// In case the file already exists, then the content will be appended to it.
-	OutputFileFormat string
-
-	// SkipHeaders controls whether header should be written in the output file.
+	// skipHeaders controls whether header should be written in the output file.
 	// If true, no header rows are written in any of the split files,
 	// else the first row of the input file will be written as header in each split chunk.
-	SkipHeaders bool
+	skipHeaders bool
 
-	// Logger represents the logger used by the processor to print info and diagnostics.
-	Logger interface {
-		Printf(string, ...any)
-	}
+	// log represents the logger used by the processor to print info and diagnostics.
+	log Logger
+
+	WriteBufferSize int
 
 	// Unexported fields
-	header []string // contains the header row
+	header               []string             // contains the header row
+	reader               CsvReader            // reader from which input content is read.
+	outputChunkGenerator OutputChunkGenerator // function to generate output chunk files
 }
 
 type ctxKey string
 
-type streamElement struct {
-	Row []string
-	Err error
+// OutputChunkGenerator generates an output writer io.WriteCloser given a chunkID.
+// chunkID will always be > 0.
+type OutputChunkGenerator func(chunkID int) (io.WriteCloser, error)
+
+func NoOpCloser(w io.Writer) io.WriteCloser {
+	return nopCloser{w}
 }
+
+type nopCloser struct {
+	io.Writer
+}
+
+func (nopCloser) Close() error { return nil }
 
 var (
 	// CtxChunkNum represents the context.Context() key which contains the current Chunk ID being processed by the Processor.
@@ -71,164 +84,141 @@ var (
 	// For headers, this value will be -1.
 	CtxRowNum ctxKey = "_csvproc_rownum"
 
-	// CtxRowNum represents the context.Context() key which contains whether the current row is a header or not.
+	// CtxIsHeader represents the context.Context() key which contains whether the current row is a header or not.
 	CtxIsHeader ctxKey = "_csvproc_isheader"
 
-	// CtxRowNum represents the context.Context() key which contains the Chunk size for this processor.
+	// CtxChunkSize represents the context.Context() key which contains the Chunk size for this processor.
 	CtxChunkSize ctxKey = "_csvproc_chunksize"
 
-	// file permission for the output files
-	permission fs.FileMode = 0o644
+	// noOpTransformer is the default transformer, it does not modify the rows.
+	noOpTransformer CsvRowTransformer = NoOpTransformer()
 )
 
-// New creates a new instance of CsvProcessor.
-//
-// inputFile - specifies the input file location.
-// chunkSize - no. of rows per file (if you do want to split the output file give the total row count here).
-// outputFileFormat - the format with which the output file names are generated.
-// rowTransformer - function to modify/transform the row.
-func New(inputFile string, chunkSize int, outputFileFormat string, rowTransformer func(context.Context, []string) []string) *Processor {
-	if rowTransformer == nil {
-		rowTransformer = NoOpTransformer()
-	}
+const (
+	// file permission for the output files.
+	permission fs.FileMode = 0o644
 
-	return &Processor{
-		InputFile:        inputFile,
-		ChunkSize:        chunkSize,
-		OutputFileFormat: outputFileFormat,
-		Logger:           log.Default(),
-		RowTransformer:   rowTransformer,
-	}
-}
+	// DefaultWriteBufferSize represents the default write buffer size of CsvWriter implementation used by the Processor.
+	DefaultWriteBufferSize = 10 * 1024 * 1024
+
+	// DefaultReadBufferSize represents the default read buffer size of CsvReader implementation used by the Processor.
+	DefaultReadBufferSize = 10 * 1024 * 1024
+)
 
 // Process performs the transformation and splitting and writes the output to the given location.
 func (c *Processor) Process() error {
-	rows := 0
-	split := 1
+	return c.process()
+}
 
-	inputFile, err := os.Open(c.InputFile)
-	if err != nil {
-		return err
-	}
-	defer inputFile.Close()
+func (c *Processor) process() error {
+	var fileWriter CsvWriter
+	var outputFile io.WriteCloser
 
-	var fileWriter *csv.Writer
-	var outputFile *os.File
-	var addHeaders = !c.SkipHeaders
-	var needNewChunk = true
-	defer func() {
-		if outputFile != nil {
-			outputFile.Close()
-		}
-	}()
+	currentRow := 0
+	currentSplit := 0
+	addHeaders := !c.skipHeaders
+	needNewChunk := true
+	ctx := newCtx()
 
-	for element := range streamRows(inputFile) {
-		row := element.Row
-		if element.Err != nil {
-			return element.Err
+	ctx.setValue(CtxChunkSize, c.chunkSize)
+
+	for {
+		row, err := c.reader.Read()
+		if errors.Is(err, io.EOF) {
+			break
 		}
 
 		if needNewChunk {
-			if fileWriter != nil {
-				// close previous chunk file
-				c.Logger.Printf("%d rows processed \n", rows)
-				if err = c.flushToFile(fileWriter); err != nil {
-					return err
-				}
-
-				if err = outputFile.Close(); err != nil {
-					return err
-				}
-				split++
-				addHeaders = !c.SkipHeaders
-			}
-
-			outputFile, err = c.createNewSplitFile(split)
+			// close previous chunk file
+			c.log("%d rows processed \n", currentRow)
+			err := flushAndCloseFile(fileWriter, outputFile)
 			if err != nil {
 				return err
 			}
 
-			fileWriter = csv.NewWriter(outputFile)
-		}
+			// update split id
+			currentSplit++
+			ctx.setValue(CtxChunkNum, currentSplit)
+			addHeaders = !c.skipHeaders
 
-		if addHeaders {
-			addHeaders = false
-
-			// first row in first chunk
-			if c.header == nil {
-				c.header = row
-			}
-
-			// transform and write header
-			ctx := c.getCtx(split, -1, true)
-			if err := fileWriter.Write(c.RowTransformer(ctx, c.header)); err != nil {
+			// create next chunk file
+			outputFile, err = c.outputChunkGenerator(currentSplit)
+			if err != nil {
 				return err
 			}
 
-			if rows == 0 {
+			fileWriter = c.getCsvWriter(outputFile)
+		}
+
+		if addHeaders {
+			// transform and write header
+			err = c.writeHeaders(row, ctx, fileWriter)
+			if err != nil {
+				return err
+			}
+
+			addHeaders = false
+
+			if currentRow == 0 {
 				needNewChunk = false
 				continue
 			}
 		}
 
-		rows++
+		currentRow++
 		// transform the row
-		ctx := c.getCtx(split, rows, false)
-		if err := fileWriter.Write(c.RowTransformer(ctx, row)); err != nil {
+		ctx.setValue(CtxIsHeader, false)
+		ctx.setValue(CtxRowNum, currentRow)
+		if err := fileWriter.Write(c.rowTransformer(ctx, row)); err != nil {
 			return err
 		}
 
-		needNewChunk = (rows % c.ChunkSize) == 0
+		needNewChunk = (currentRow % c.chunkSize) == 0
 	}
 
-	if (rows%c.ChunkSize) != 0 && fileWriter != nil {
-		if err := c.flushToFile(fileWriter); err != nil {
-			return err
+	c.log("%d total rows updated", currentRow)
+	return flushAndCloseFile(fileWriter, outputFile)
+}
+
+func flushAndCloseFile(fileWriter CsvWriter, outputFile io.WriteCloser) error {
+	if fileWriter != nil {
+		if err := flushToFile(fileWriter); err != nil {
+			return fmt.Errorf("csprocessor: error while flushing to output file: %w", err)
 		}
 	}
 
-	c.Logger.Printf("%d total rows updated", rows)
+	if outputFile != nil {
+		if err := outputFile.Close(); err != nil {
+			return fmt.Errorf("csprocessor: error while closing output file: %w", err)
+		}
+	}
 	return nil
 }
 
-func (c *Processor) getCtx(chunkID, rowID int, isHeader bool) context.Context {
-	ctx := context.WithValue(context.TODO(), CtxChunkSize, c.ChunkSize)
-	ctx = context.WithValue(ctx, CtxChunkNum, chunkID)
-	ctx = context.WithValue(ctx, CtxRowNum, rowID)
-	ctx = context.WithValue(ctx, CtxIsHeader, isHeader)
-	return ctx
+func (c *Processor) writeHeaders(row []string, ctx *csvCtx, fileWriter CsvWriter) error {
+	if c.header == nil {
+		c.header = row
+	}
+
+	ctx.setValue(CtxIsHeader, true)
+	ctx.setValue(CtxRowNum, -1)
+	return fileWriter.Write(c.rowTransformer(ctx, c.header))
 }
 
-func (c *Processor) createNewSplitFile(split int) (*os.File, error) {
-	filename := fmt.Sprintf(c.OutputFileFormat, split)
-	filename = strings.Split(filename, "%!")[0]
-
-	return os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, permission)
+func (c *Processor) getCsvWriter(outputFile io.WriteCloser) CsvWriter {
+	return csv.NewWriter(bufio.NewWriterSize(outputFile, c.WriteBufferSize))
 }
 
-func (c *Processor) flushToFile(w *csv.Writer) error {
+func splitFileGenerator(outputFileFormat string) func(int) (io.WriteCloser, error) {
+	return func(split int) (io.WriteCloser, error) {
+		filename := fmt.Sprintf(outputFileFormat, split)
+		filename = strings.Split(filename, "%!")[0]
+
+		return os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, permission) //nolint:nosnakecase
+	}
+}
+
+func flushToFile(w CsvWriter) error {
 	w.Flush()
 	return w.Error()
-}
-
-func streamRows(rc io.Reader) (ch chan streamElement) {
-	buffer := 10
-	ch = make(chan streamElement, buffer)
-	go func() {
-		r := csv.NewReader(rc)
-		r.LazyQuotes = true
-		r.TrimLeadingSpace = true
-		r.FieldsPerRecord = -1
-		defer close(ch)
-		for {
-			rec, err := r.Read()
-			if err == io.EOF {
-				break
-			}
-
-			ch <- streamElement{rec, err}
-		}
-	}()
-
-	return
 }
