@@ -14,7 +14,7 @@ PWD = $(shell pwd)
 # Detecting GOPATH and removing trailing "/" if any
 GOPATH = $(realpath $(shell $(GO) env GOPATH))
 
-install:  .git/hooks/pre-commit test 
+install:  .git/hooks/pre-commit test bench
 
 .git/hooks/pre-commit:
 	@echo "setting githooks path"

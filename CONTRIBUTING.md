@@ -5,6 +5,15 @@ When contributing to this repository, please first discuss the change you wish t
 
 Please note we have a code of conduct, please follow it in all your interactions with the project.
 
+## Getting started
+1. Clone the repo using `git clone https://github.com/sivaramasubramanian/csvprocessor.git`
+2. Install `go` and `make` if not already installed.
+3. Run `make install` to install the dev dependencies.
+4. Make the changes as per [coding guidelines](#coding-guidelines) and run the unit tests using `make test`
+5. To run benchmarks, use `make bench`
+6. After verifying the test results, commit the code with commit as per the [commit message guidelines](#commit-messages)
+7. Push the code and raise a PR for review and follow the [Pull request process](#pull-request-process)
+
 ## Coding guidelines
 1. Ensure to add test cases for any changes, to keep the code coverage at a maximum.
 2. Always run lint (golang-ci lint) before commiting any changes.

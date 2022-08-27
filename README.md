@@ -8,6 +8,7 @@ The file is streamed and processed so it can handle large files that are multipl
 [![Go](https://github.com/sivaramasubramanian/csvprocessor/actions/workflows/go.yml/badge.svg?branch=main)](https://github.com/sivaramasubramanian/csvprocessor/actions/workflows/go.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/sivaramasubramanian/csvprocessor)](https://goreportcard.com/report/github.com/sivaramasubramanian/csvprocessor)
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://choosealicense.com/licenses/mit/)
+[![codecov](https://codecov.io/gh/sivaramasubramanian/csvprocessor/branch/main/graph/badge.svg?token=MDJRV87MXC)](https://codecov.io/gh/sivaramasubramanian/csvprocessor)
 
 ## Installation
 Install:
@@ -24,6 +25,13 @@ import "github.com/sivaramasubramanian/csvprocessor"
 ## Usage
 - [Simple Usage](#simple-usage)
     - [Splitting a single CSV file into multiple files](#splitting-a-single-csv-file-into-multiple-files)
+    - [Transforming the contents of the CSV](#transforming-the-contents-of-the-csv)
+    - [Predefined Transformer Functions](#predefined-transformer-functions)
+    - [Transform the content without splitting the output](#transform-without-splitting)
+- [Advanced Usage](#advanced-usage)
+    - [Chaining multiple Transformers together](#combining-multiple-transformers)
+    - [Providing a custom logger implementation](#using-custom-logger)
+    - [Wrapping a transformer with a debug log etc..](#wrapping-transformer-executions)
 
 
 ### Simple Usage
@@ -38,16 +46,21 @@ outputFilenameFormat := "/path/to/output_%03d.csv"
 // no-op transformer does not transform the rows
 transformer := csvprocessor.NoOpTransformer()
 
-c := csvprocessor.New(inputFile, rowsPerFile, outputFilenameFormat, transformer)
+c, err := csvprocessor.NewFileReader(inputFile, rowsPerFile, outputFilenameFormat, transformer)
+if err != nil {
+	log.Printf("error while creating csvprocessor %v ", err)
+    return
+}
+
 // processes and splits the file
-err := c.Process()
+err = c.Process()
 if err != nil {
     log.Printf("error while splitting csv %v ",err)
 }
 ```
 
 
-#### Transforming the content of the CSV
+#### Transforming the contents of the CSV
 For example, to convert all the values in the 3rd column to Upper case,
 ```go
 inputFile := "/path/to/input.csv"
@@ -69,8 +82,13 @@ upperCaseTransformer := func(ctx context.Context, row []string) []string {
     return row
 }
 
-c := csvprocessor.New(inputFile, rowsPerFile, outputFilenameFormat, upperCaseTransformer)
-err := c.Process()
+c, err := csvprocessor.NewFileReader(inputFile, rowsPerFile, outputFilenameFormat, upperCaseTransformer)
+if err != nil {
+	log.Printf("error while creating csvprocessor %v ", err)
+    return
+}
+
+err = c.Process()
 if err != nil {
     log.Printf("error while splitting csv %v ",err)
 }
@@ -85,8 +103,13 @@ rowsPerFile := 100_000
 outputFilenameFormat := "/path/to/output_%03d.csv" 
 addRowNumberTransformer := csvprocessor.AddRowNoTransformer()
 
-c := csvprocessor.New(inputFile, rowsPerFile, outputFilenameFormat, addRowNumberTransformer)
-err := c.Process()
+c, err := csvprocessor.NewFileReader(inputFile, rowsPerFile, outputFilenameFormat, addRowNumberTransformer)
+if err != nil {
+	log.Printf("error while creating csvprocessor %v ", err)
+    return
+}
+
+err = c.Process()
 if err != nil {
     log.Printf("error while splitting csv %v ",err)
 }
@@ -102,13 +125,19 @@ rowsPerFile := 1500 // entire input file has only 1500 so only one output file w
 outputFilenameFormat := "/path/to/output.csv" // we can omit the %d format as there will be only one output file
 addRowNumberTransformer := csvprocessor.AddRowNoTransformer("S.no") // pass the column name for the row number colum
 
-c := csvprocessor.New(inputFile, rowsPerFile, outputFilenameFormat, addRowNumberTransformer)
-err := c.Process()
+c, err := csvprocessor.NewFileReader(inputFile, rowsPerFile, outputFilenameFormat, addRowNumberTransformer)
+if err != nil {
+	log.Printf("error while creating csvprocessor %v ", err)
+    return
+}
+
+err = c.Process()
 if err != nil {
     log.Printf("error while splitting csv %v ",err)
 }
 ```
 
+### Advanced Usage
 #### Combining multiple Transformers
 To do a series of transformations for each row, we can chain the transformations,
 ```go
@@ -135,8 +164,13 @@ combinedTransformer := csvprocessor.ChainTransformers(
 )
 
 // performs all the transformations
-c := csvprocessor.New(inputFile, rowsPerFile, outputFilenameFormat, combinedTransformer)
-err := c.Process()
+c, err := csvprocessor.NewFileReader(inputFile, rowsPerFile, outputFilenameFormat, combinedTransformer)
+if err != nil {
+	log.Printf("error while creating csvprocessor %v ", err)
+    return
+}
+
+err = c.Process()
 if err != nil {
     log.Printf("error while splitting csv %v ",err)
 }
@@ -148,9 +182,17 @@ To provide your own logger,
 // any custom logger that implements `func(format string, args ...any)`
 logger = logrus.New().Debugf
 
-c := csvprocessor.New("input.csv", 100, "output.csv", nil)
-
-c.LoggerFunc = logger // set logger to csvprocessor
+c, err := csvprocessor.New(
+		csvprocessor.WithFileReader("input.csv"),
+		csvprocessor.WithOutputFileFormat("output.csv"),
+		csvprocessor.WithTransformer(csvprocessor.NoOpTransformer()),
+		csvprocessor.WithChunkSize(100),
+		csvprocessor.WithLogger(logger),
+	)
+if err != nil {
+    log.Printf("error while creating csvprocessor %v ",err)
+    return
+}
 
 err := c.Process()
 if err != nil {
@@ -187,11 +229,11 @@ if err != nil {
 
 ## Roadmap
 - [x] csvprocessor
-- [x] Transforemr
+- [x] Transformer
 - [x] Wrapper
 - [ ] Helper Functions including merger
-- [ ] Unit tests
-- [ ] Benchmarking
+- [-] Unit tests
+- [-] Benchmarking
 
 ## Contributing
 

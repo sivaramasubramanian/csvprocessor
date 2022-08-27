@@ -63,6 +63,9 @@ type ctxKey string
 
 // OutputChunkGenerator generates an output writer io.WriteCloser given a chunkID.
 // chunkID will always be > 0.
+//
+// You can customize the output file location, type etc by providing a OutputChunkGenerator to the processor.
+// See 'csvprocessor.WithWriterGenerator()' for more details.
 type OutputChunkGenerator func(chunkID int) (io.WriteCloser, error)
 
 func NoOpCloser(w io.Writer) io.WriteCloser {
