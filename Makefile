@@ -18,7 +18,9 @@ install:  .git/hooks/pre-commit test
 
 .git/hooks/pre-commit:
 	@echo "setting githooks path"
-	@git config core.hooksPath .githooks
+	@git config core.hooksPath .githooks/
+	@echo "checking githooks path"
+	@git config --get core.hooksPath
 
 ## Run tests
 test: test-unit
