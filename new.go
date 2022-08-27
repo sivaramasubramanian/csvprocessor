@@ -13,12 +13,6 @@ import (
 )
 
 // NewFileReader creates a new instance of CsvProcessor.
-//
-// Parameters:
-//  - inputFile: specifies the input file location.
-//  - chunkSize: no. of rows per file (if you do want to split the output file give the total row count here).
-//  - outputFileFormat: the format with which the output file names are generated.
-//  - rowTransformer: function to modify/transform the row.
 func NewFileReader(inputFile string, chunkSize int, outputFileFormat string, rowTransformer func(context.Context, []string) []string) (*Processor, error) {
 	return New(
 		WithFileReader(inputFile),

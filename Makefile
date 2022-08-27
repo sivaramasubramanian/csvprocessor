@@ -14,8 +14,19 @@ PWD = $(shell pwd)
 # Detecting GOPATH and removing trailing "/" if any
 GOPATH = $(realpath $(shell $(GO) env GOPATH))
 
+install:  .git/hooks/pre-commit test 
+
+.git/hooks/pre-commit:
+	@echo "setting githooks path"
+	@git config core.hooksPath .githooks
+
 ## Run tests
 test: test-unit
+
+## Run unit tests
+test-unit:
+	@echo "Running unit tests."
+	@CGO_ENABLED=1 $(GO) test -short -coverprofile=unit.coverprofile -covermode=atomic -race ./...
 
 BENCH_COUNT ?= 5
 MASTER_BRANCH ?= main
@@ -40,8 +51,3 @@ bench-stat-diff: bench-stat-cli
 ## Show result of benchmark.
 bench-stat: bench-stat-cli
 	@$(GOPATH)/bin/benchstat bench-$(REF_NAME).txt
-
-## Run unit tests
-test-unit:
-	@echo "Running unit tests."
-	@CGO_ENABLED=1 $(GO) test -short -coverprofile=unit.coverprofile -covermode=atomic -race ./...
