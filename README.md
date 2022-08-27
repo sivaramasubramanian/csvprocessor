@@ -220,7 +220,6 @@ wrappedTransformer := panicSafe(debug(addChunkRowNumber, logFunc), logFunc)
 
 // performs all the transformations
 c := csvprocessor.New(inputFile, rowsPerFile, outputFilenameFormat, wrappedTransformer)
-c.LoggerFunc = logFunc
 err := c.Process()
 if err != nil {
     log.Printf("error while splitting csv %v ", err)
