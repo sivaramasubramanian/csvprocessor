@@ -10,6 +10,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"strings"
 )
 
 // NewFileReader creates a new instance of CsvProcessor.
@@ -23,6 +24,14 @@ func NewFileReader(inputFile string, chunkSize int, outputFileFormat string, row
 }
 
 func NewBufferReader(inputReader io.Reader, outputWriter io.WriteCloser) (*Processor, error) {
+	if inputReader == nil {
+		return nil, ErrInputReaderNil
+	}
+
+	if outputWriter == nil {
+		return nil, ErrOutputWriterNil
+	}
+
 	return New(
 		WithReader(csv.NewReader(inputReader)),
 		WithWriterGenerator(func(int) (io.WriteCloser, error) {
@@ -76,8 +85,6 @@ func WithFileReader(inputFile string) Option {
 
 		var csvReader = csv.NewReader(bufio.NewReaderSize(input, DefaultReadBufferSize))
 		csvReader.LazyQuotes = true
-		csvReader.TrimLeadingSpace = true
-		csvReader.FieldsPerRecord = -1
 		csvReader.ReuseRecord = true
 
 		c.reader = csvReader
@@ -101,6 +108,10 @@ func WithTransformer(t CsvRowTransformer) Option {
 // WithOutputFileFormat sets the output file format used to generate output file names.
 func WithOutputFileFormat(format string) Option {
 	return func(c *Processor) error {
+		if strings.TrimSpace(format) == "" {
+			return ErrInvalidOutputFileFormat
+		}
+
 		c.outputChunkGenerator = splitFileGenerator(format)
 		return nil
 	}
@@ -140,8 +151,10 @@ func SkipHeaders(skip bool) Option {
 
 var (
 	ErrInputReaderNil             = errors.New("csvprocessor: input reader cannot be nil")
+	ErrOutputWriterNil            = errors.New("csvprocessor: output writer cannot be nil")
 	ErrOutputChunkGeneratorNotSet = errors.New("csvprocessor: function to generate output chunks not set")
 	ErrInvalidChunkSize           = errors.New("csvprocessor: ChunkSize for splitting must be >= 0, to prevent splitting use math.MaxInt as ChunkSize")
+	ErrInvalidOutputFileFormat    = errors.New("csvprocessor: OutputFileFormat cannot be empty")
 )
 
 func validate(c *Processor) (*Processor, error) {
