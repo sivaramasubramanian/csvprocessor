@@ -1,10 +1,13 @@
 package csvprocessor
 
-import "time"
+import (
+	"context"
+)
 
 type any = interface{} //nolint:predeclared
 type csvCtx struct {
-	m map[ctxKey]any
+	context.Context //nolint:containedctx
+	m               map[ctxKey]any
 }
 
 func newCtx() *csvCtx {
@@ -12,18 +15,6 @@ func newCtx() *csvCtx {
 	ctx.m = make(map[ctxKey]any)
 
 	return &ctx
-}
-
-func (c *csvCtx) Deadline() (deadline time.Time, ok bool) {
-	return
-}
-
-func (c *csvCtx) Done() <-chan struct{} {
-	return nil
-}
-
-func (c *csvCtx) Err() error {
-	return nil
 }
 
 func (c *csvCtx) Value(key any) any {

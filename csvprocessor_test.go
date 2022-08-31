@@ -119,6 +119,25 @@ func TestProcessor_Process(t *testing.T) {
 				elementLength: 6 * 10,
 			},
 		},
+		{
+			name: "Test With Headers - verySmallCSV - with transformer",
+			args: args{
+				reader:         strings.NewReader(verySmallCSV),
+				expectedChunks: 3,
+				opt: []csvprocessor.Option{
+					csvprocessor.WithLogger(t.Logf),
+					csvprocessor.WithTransformer(
+						csvprocessor.AddChunkRowNoTransformer("id"),
+					),
+				},
+			},
+			expect: expect{
+				wantErr:      false,
+				bufferLength: 3,
+				// existing content + id header + id value
+				elementLength: (6 * 2) + (2 + 1) + (1 + 1),
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
