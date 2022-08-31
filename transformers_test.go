@@ -187,20 +187,56 @@ func TestReplaceValuesTransformer(t *testing.T) {
 			},
 			want: []string{"a", "b", "c"},
 		},
-		{
-			name: "Test header row is not replcaed",
-			args: args{
-				ctx:      context.WithValue(context.TODO(), csvprocessor.CtxIsHeader, true),
-				inputRow: []string{"a", "b", "NULL"},
-			},
-			want: []string{"a", "b", "NULL"},
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			actual := transformer(tt.args.ctx, tt.args.inputRow)
 			if !reflect.DeepEqual(actual, tt.want) {
 				t.Errorf("ReplaceValuesTransformer() = %v, want %v", actual, tt.want)
+			}
+		})
+	}
+}
+
+func TestChainTransformers(t *testing.T) {
+	replacements := make(map[string]string)
+	replacements["NULL"] = ""
+	replaceValues := csvprocessor.ReplaceValuesTransformer(replacements)
+	addConstColumn := csvprocessor.AddConstantColumnTransformer("const column", "hello", 2)
+
+	transformer := csvprocessor.ChainTransformers(replaceValues, addConstColumn)
+
+	type args struct {
+		ctx      context.Context //nolint:containedctx
+		inputRow []string
+	}
+	tests := []struct {
+		name string
+		args args
+		want []string
+	}{
+		{
+			name: "Test replacements",
+			args: args{
+				ctx:      context.WithValue(context.TODO(), csvprocessor.CtxIsHeader, false),
+				inputRow: []string{"a", "b", "NULL"},
+			},
+			want: []string{"a", "b", "hello", ""},
+		},
+		{
+			name: "Test row without any match",
+			args: args{
+				ctx:      context.WithValue(context.TODO(), csvprocessor.CtxIsHeader, false),
+				inputRow: []string{"a", "b", "c"},
+			},
+			want: []string{"a", "b", "hello", "c"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := transformer(tt.args.ctx, tt.args.inputRow)
+			if !reflect.DeepEqual(actual, tt.want) {
+				t.Errorf("ChainTransformers() = %v, want %v", actual, tt.want)
 			}
 		})
 	}

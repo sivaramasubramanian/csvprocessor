@@ -1,4 +1,4 @@
-#GOLANGCI_LINT_VERSION := "v1.48.0" # Optional configuration to pinpoint golangci-lint version.
+GOLANGCI_LINT_VERSION := "v1.48.0" # Optional configuration to pinpoint golangci-lint version.
 
 # The head of Makefile determines location of dev-go to include standard targets.
 GO ?= go
@@ -14,17 +14,24 @@ PWD = $(shell pwd)
 # Detecting GOPATH and removing trailing "/" if any
 GOPATH = $(realpath $(shell $(GO) env GOPATH))
 
-install:  .git/hooks/pre-commit test bench
+install:  .git/hooks/pre-commit lint test bench
 
 .git/hooks/pre-commit:
 	@echo "setting githooks path"
 	@git config core.hooksPath .githooks/
 	@echo "checking githooks path"
 	@git config --get core.hooksPath
+	@echo "installing errcheck"
 	@$(GO) install github.com/kisielk/errcheck@latest
+	@echo "installing golangci-lint"
+	@$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+
+## Run linter
+lint:
+	@golangci-lint run
 
 ## Run tests
-test: test-unit
+test: lint test-unit
 
 ## Run unit tests
 test-unit:

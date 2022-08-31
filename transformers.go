@@ -55,14 +55,8 @@ func AddChunkRowNoTransformer(columnName string) CsvRowTransformer {
 }
 
 // ReplaceValuesTransformer adds a row number to each row.
-// If SkipHeaders is false, it will add a header column for the row number with the given columnName.
 func ReplaceValuesTransformer(replacements map[string]string) CsvRowTransformer {
 	return func(ctx context.Context, row []string) []string {
-		isHeader, isBool := (ctx.Value(CtxIsHeader)).(bool)
-		if isBool && isHeader {
-			return row
-		}
-
 		for i, element := range row {
 			if val, ok := replacements[element]; ok {
 				row[i] = val
@@ -74,7 +68,6 @@ func ReplaceValuesTransformer(replacements map[string]string) CsvRowTransformer 
 }
 
 // AddConstantColumnTransformer adds a new column with the given constant value.
-// If SkipHeaders is false, it will add a header column for the row number with the given columnName.
 func AddConstantColumnTransformer(columnName, val string, columIndex int) CsvRowTransformer {
 	return func(ctx context.Context, row []string) []string {
 		isHeader, isBool := (ctx.Value(CtxIsHeader)).(bool)
