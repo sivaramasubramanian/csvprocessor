@@ -18,6 +18,11 @@ g,h,i
 j,k,l
 `
 
+// noOpLogger is used for disabling logging when running benchmarks.
+var noOpLogger csvprocessor.Logger = func(string, ...any) {
+
+}
+
 type args struct {
 	reader         io.Reader
 	opt            []csvprocessor.Option
@@ -160,49 +165,90 @@ func TestProcessor_Process(t *testing.T) {
 	}
 }
 
-func BenchmarkProcessor_Process(b *testing.B) {
-	arg := args{
-		reader:         strings.NewReader(verySmallCSV),
-		expectedChunks: 3,
-		opt: []csvprocessor.Option{
-			csvprocessor.WithLogger(b.Logf),
+func BenchmarkProcessor(b *testing.B) {
+	csv4mRows := strings.NewReader(strings.Repeat(verySmallCSV, 1_000_000))
+	benches := []struct {
+		name   string
+		args   args
+		expect expect
+	}{
+
+		{
+			name: "BenchmarkProcessor_Process_4000_rows",
+			args: args{
+				// 4 * 1000
+				reader:         strings.NewReader(strings.Repeat(verySmallCSV, 1000)),
+				expectedChunks: ((4 * 1000) / 10),
+				opt: []csvprocessor.Option{
+					csvprocessor.WithLogger(noOpLogger),
+					csvprocessor.WithChunkSize(10),
+				},
+			},
+			expect: expect{
+				wantErr: false,
+			},
+		},
+		{
+			name: "BenchmarkProcessor_Process_4000_rows_cz_100",
+			args: args{
+				reader:         strings.NewReader(strings.Repeat(verySmallCSV, 1000)),
+				expectedChunks: ((4 * 1000) / 100),
+				opt: []csvprocessor.Option{
+					csvprocessor.WithLogger(noOpLogger),
+					csvprocessor.WithChunkSize(100),
+				},
+			},
+			expect: expect{
+				wantErr: false,
+			},
+		},
+		{
+			name: "BenchmarkProcessor_ProcessWithoutHeader_4000_rows",
+			args: args{
+				reader:         strings.NewReader(strings.Repeat(verySmallCSV, 1000)),
+				expectedChunks: ((4 * 1000) / 10),
+				opt: []csvprocessor.Option{
+					csvprocessor.WithLogger(noOpLogger),
+					csvprocessor.WithChunkSize(10),
+					csvprocessor.SkipHeaders(true),
+				},
+			},
+			expect: expect{
+				wantErr: false,
+			},
+		},
+		{
+			name: "BenchmarkProcessor_ProcessWithoutHeader_4_000_000_rows_cz_100",
+			args: args{
+				reader:         csv4mRows,
+				expectedChunks: ((4 * 1_000_000) / 1000),
+				opt: []csvprocessor.Option{
+					csvprocessor.WithLogger(noOpLogger),
+					csvprocessor.WithChunkSize(1000),
+					csvprocessor.SkipHeaders(true),
+				},
+			},
+			expect: expect{
+				wantErr: false,
+			},
 		},
 	}
-	wantErr := false
 
-	for i := 0; i < b.N; i++ {
-		var buffer = make([]strings.Builder, arg.expectedChunks)
-		proc := newProcessor(b, arg.reader, buffer, arg.opt...)
-		if err := proc.Process(); (err != nil) != wantErr {
-			b.Errorf("Processor.Process() error = %v, wanbErr %v", err, wantErr)
-		}
-
-		for index, element := range buffer {
-			b.Logf("\n i = %v : arr = %s : len = %v", index, element.String(), element.Len())
-		}
+	for _, bench := range benches {
+		b.Run(bench.name, func(b *testing.B) {
+			runBenchmark(b, bench.args, bench.expect.wantErr)
+		})
 	}
 }
 
-func BenchmarkProcessor_ProcessWithoutHeader(b *testing.B) {
-	arg := args{
-		reader:         strings.NewReader(verySmallCSV),
-		expectedChunks: 4,
-		opt: []csvprocessor.Option{
-			csvprocessor.WithLogger(b.Logf),
-			csvprocessor.SkipHeaders(true),
-		},
-	}
-	wantErr := false
+func runBenchmark(b *testing.B, arg args, wantErr bool) {
+	b.Helper()
 
 	for i := 0; i < b.N; i++ {
 		var buffer = make([]strings.Builder, arg.expectedChunks)
 		proc := newProcessor(b, arg.reader, buffer, arg.opt...)
 		if err := proc.Process(); (err != nil) != wantErr {
-			b.Errorf("Processor.Process() error = %v, wanbErr %v", err, wantErr)
-		}
-
-		for index, element := range buffer {
-			b.Logf("\n i = %v : arr = %s : len = %v", index, element.String(), element.Len())
+			b.Errorf(" error = %v, wantErr %v", err, wantErr)
 		}
 	}
 }
