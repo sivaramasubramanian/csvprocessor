@@ -18,6 +18,9 @@ linters-settings:
     check-exported: false
   unparam:
     check-exported: true
+  testpackage:
+    skip-regexp: (export|internal|context)_test\.go
+
 
 linters:
   enable-all: true

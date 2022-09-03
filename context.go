@@ -11,9 +11,7 @@ type csvCtx struct {
 }
 
 func newCtx() *csvCtx {
-	ctx := csvCtx{}
-	ctx.m = make(map[ctxKey]any)
-
+	ctx := csvCtx{context.TODO(), make(map[ctxKey]any)}
 	return &ctx
 }
 
